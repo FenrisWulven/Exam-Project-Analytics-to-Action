@@ -32,13 +32,6 @@ uv pip install -r requirements.txt
 2. Place the data files in the `data/` directory
 3. Ensure your data files match the expected format as described in the notebooks
 
-## Project Structure
-
-- `notebooks/`: Jupyter notebooks containing analysis
-- `data/`: Place your dataset files here (not included in repo)
-- `src/`: Source code for reusable functions
-- `requirements.txt`: Project dependencies
-
 ## Contributing
 
 ### Before You Start
