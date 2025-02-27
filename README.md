@@ -6,13 +6,15 @@
 
 1. Install `uv` (recommended over regular venv for faster dependency resolution):
 ```bash
+pip install uv
+# OR
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 2. Create and activate virtual environment:
 ```bash
 uv venv
-source .venv/bin/activate  # On Unix-like systems
+source .venv/bin/activate  # On Unix-like systems or macOS
 # OR
 .venv\Scripts\activate     # On Windows
 ```

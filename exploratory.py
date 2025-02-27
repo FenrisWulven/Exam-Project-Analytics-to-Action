@@ -85,6 +85,36 @@ def process_batch(texts, tokenizer, model, device, batch_size=8):
     
     return results
 
+# Create genre-emotion mapping for typical expectations
+genre_emotion_mapping = {
+    'Horror': ['fear', 'disgust'],
+    'Comedy': ['joy'],
+    'Drama': ['sadness', 'neutral'],
+    'Romance': ['joy'],
+    'Thriller': ['fear', 'surprise'],
+    'Action': ['surprise', 'anger'],
+    'Adventure': ['surprise', 'joy'],
+    'Crime': ['anger', 'fear'],
+    'Mystery': ['surprise', 'fear'],
+    'Sci-Fi': ['surprise', 'fear']
+}
+
+def calculate_genre_emotion_match(row):
+    """Calculate how well the plot emotions match the expected genre emotions"""
+    if pd.isna(row['genres']) or pd.isna(row['emotion']):
+        return None
+    
+    genres = row['genres'].split(', ')
+    expected_emotions = set()
+    for genre in genres:
+        if genre in genre_emotion_mapping:
+            expected_emotions.update(genre_emotion_mapping[genre])
+    
+    if not expected_emotions:
+        return None
+    
+    return 1 if row['emotion'] in expected_emotions else 0
+
 # Add sentiment analysis for plot descriptions
 print("Performing sentiment analysis on plot descriptions...")
 tokenizer, model, device = load_model()
@@ -105,6 +135,14 @@ for idx, result in zip(non_null_idx, results):
     df.loc[idx, 'plot_sentiment_label'] = result['sentiment_label']
     df.loc[idx, 'plot_sentiment_score'] = result['sentiment_score']
     df.loc[idx, 'emotion'] = result['emotion']
+
+# Create DataFrame with emotion scores
+emotion_scores_df = pd.DataFrame([result['emotion_scores'] for result in results], index=non_null_idx)
+for emotion in emotion_scores_df.columns:
+    df.loc[non_null_idx, f'emotion_score_{emotion}'] = emotion_scores_df[emotion]
+
+# Calculate genre-emotion match
+df['genre_emotion_match'] = df.apply(calculate_genre_emotion_match, axis=1)
 
 # Print summary of sentiment analysis
 print("\nPlot Sentiment Distribution:")
@@ -200,10 +238,10 @@ save_plot('correlation_heatmap.png')
 
 # New plots for additional insights:
 
-# Language Distribution
+# Language Distribution (sorted)
 plt.figure(figsize=(12, 6))
-lang_counts = df['firstLanguage'].value_counts().head(15)
-sns.barplot(x=lang_counts.index, y=lang_counts.values)
+lang_counts = df['firstLanguage'].value_counts()
+sns.barplot(x=lang_counts.head(15).index, y=lang_counts.head(15).values)
 plt.title('Top 15 First Languages in Movies')
 plt.xlabel('Language')
 plt.ylabel('Count')
@@ -228,15 +266,13 @@ plt.ylabel('IMDb Rating')
 plt.xticks(rotation=45)
 save_plot('ratings_by_decade.png')
 
-# Genre Analysis
-# First, create a list of all genres
+# Genre Analysis (sorted)
 genres = []
 for genre_list in df['genres'].dropna():
     genres.extend(genre_list.split(', '))
-genre_counts = pd.Series(genres).value_counts().head(15)
-
+genre_counts = pd.Series(genres).value_counts()
 plt.figure(figsize=(12, 6))
-sns.barplot(x=genre_counts.index, y=genre_counts.values)
+sns.barplot(x=genre_counts.head(15).index, y=genre_counts.head(15).values)
 plt.title('Top 15 Movie Genres')
 plt.xlabel('Genre')
 plt.ylabel('Count')
@@ -251,16 +287,6 @@ plt.xlabel('Runtime (minutes)')
 plt.ylabel('IMDb Rating')
 save_plot('runtime_vs_rating.png')
 
-# Rating vs Votes by Type
-plt.figure(figsize=(10, 6))
-sns.scatterplot(data=df, x='imdbRating', y='numberOfVotes', hue='titleType', alpha=0.5)
-plt.yscale('log')
-plt.title('Rating vs Votes by Title Type')
-plt.xlabel('IMDb Rating')
-plt.ylabel('Number of Votes (log scale)')
-plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-save_plot('rating_votes_by_type.png')
-
 # Average Rating by Country (top 20 countries)
 top_countries = df.groupby('mainCountry')['imdbRating'].agg(['mean', 'count']).sort_values('count', ascending=False).head(20)
 plt.figure(figsize=(12, 6))
@@ -271,15 +297,13 @@ plt.ylabel('Average IMDb Rating')
 plt.xticks(rotation=45)
 save_plot('avg_rating_by_country.png')
 
-# Production Companies Analysis
-# Create a list of all production companies
+# Production Companies Analysis (sorted)
 companies = []
 for company_list in df['production'].dropna():
     companies.extend(company_list.split(', '))
-company_counts = pd.Series(companies).value_counts().head(15)
-
+company_counts = pd.Series(companies).value_counts()
 plt.figure(figsize=(12, 6))
-sns.barplot(x=company_counts.index, y=company_counts.values)
+sns.barplot(x=company_counts.head(15).index, y=company_counts.head(15).values)
 plt.title('Top 15 Production Companies')
 plt.xlabel('Company')
 plt.ylabel('Number of Movies')
@@ -295,3 +319,183 @@ plt.xlabel('Emotion')
 plt.ylabel('Count')
 plt.xticks(rotation=45)
 save_plot('plot_emotions_dist.png')
+
+# Emotion vs Rating Analysis
+plt.figure(figsize=(12, 6))
+sns.boxplot(data=df, x='emotion', y='imdbRating')
+plt.title('IMDb Ratings Distribution by Plot Emotion')
+plt.xlabel('Emotion')
+plt.ylabel('IMDb Rating')
+plt.xticks(rotation=45)
+save_plot('ratings_by_emotion.png')
+
+# Genre vs Rating Analysis (sorted)
+genres_list = df['genres'].dropna().str.split(', ', expand=True).stack().unique()
+genre_ratings = []
+for genre in genres_list:
+    mask = df['genres'].str.contains(genre, na=False)
+    avg_rating = df[mask]['imdbRating'].mean()
+    count = mask.sum()
+    genre_ratings.append({'Genre': genre, 'Average Rating': avg_rating, 'Count': count})
+
+genre_df = pd.DataFrame(genre_ratings)
+genre_df = genre_df.sort_values('Average Rating', ascending=False)  # Sort by rating
+plt.figure(figsize=(15, 6))
+sns.barplot(data=genre_df, x='Genre', y='Average Rating', hue='Count', palette='viridis')
+plt.title('Average IMDb Rating by Genre (Sorted)')
+plt.xlabel('Genre')
+plt.ylabel('Average Rating')
+plt.xticks(rotation=45)
+plt.legend(title='Number of Movies')
+save_plot('avg_rating_by_genre.png')
+
+# Improved Genre-Emotion Match Analysis
+# First split genres into individual entries
+individual_genres = df['genres'].dropna().str.split(', ', expand=True).stack()
+genre_matches = []
+
+for genre in genre_emotion_mapping.keys():
+    # Get movies of this genre
+    genre_mask = df['genres'].str.contains(genre, na=False)
+    genre_movies = df[genre_mask]
+    
+    if len(genre_movies) == 0:
+        continue
+        
+    # Calculate matches for expected emotions
+    expected_emotions = genre_emotion_mapping[genre]
+    emotion_matches = genre_movies['emotion'].isin(expected_emotions)
+    
+    # Calculate statistics
+    total_movies = len(genre_movies)
+    matched_movies = emotion_matches.sum()
+    match_rate = matched_movies / total_movies
+    
+    # Get most common emotions for this genre
+    emotion_counts = genre_movies['emotion'].value_counts()
+    top_emotions = emotion_counts.head(3).index.tolist()
+    
+    genre_matches.append({
+        'Genre': genre,
+        'Match Rate': match_rate,
+        'Movie Count': total_movies,
+        'Matched Movies': matched_movies,
+        'Expected Emotions': ', '.join(expected_emotions),
+        'Top Actual Emotions': ', '.join(top_emotions)
+    })
+
+# Create DataFrame with results
+genre_match_df = pd.DataFrame(genre_matches)
+genre_match_df = genre_match_df.sort_values('Movie Count', ascending=False)
+
+# Print detailed analysis
+print("\nGenre-Emotion Match Analysis:")
+print(genre_match_df.to_string(index=False))
+
+# Create visualization
+plt.figure(figsize=(12, 8))
+bars = plt.bar(genre_match_df['Genre'], genre_match_df['Match Rate'])
+plt.title('Emotion-Genre Match Rate by Genre')
+plt.xlabel('Genre')
+plt.ylabel('Match Rate')
+plt.xticks(rotation=45, ha='right')
+
+# Add movie count as text on top of bars
+for idx, bar in enumerate(bars):
+    movie_count = genre_match_df.iloc[idx]['Movie Count']
+    plt.text(bar.get_x() + bar.get_width()/2, bar.get_height(),
+             f'n={movie_count}',
+             ha='center', va='bottom')
+
+# Add grid for better readability
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+# Adjust layout and save
+plt.tight_layout()
+save_plot('genre_emotion_match_improved.png')
+
+# Create a detailed heatmap of actual vs expected emotions
+plt.figure(figsize=(15, 8))
+
+# Create genre-emotion mapping for analysis
+genre_emotion_data = []
+for genre in genre_emotion_mapping.keys():
+    # Get movies of this genre
+    genre_mask = df['genres'].str.contains(genre, na=False)
+    genre_movies = df[genre_mask]
+    
+    if len(genre_movies) == 0:
+        continue
+    
+    # Calculate emotion proportions for this genre
+    emotion_props = genre_movies['emotion'].value_counts(normalize=True)
+    
+    # Convert to dictionary and ensure all emotions are present
+    emotion_dict = emotion_props.to_dict()
+    for emotion in ['anger', 'disgust', 'fear', 'joy', 'neutral', 'sadness', 'surprise']:
+        if emotion not in emotion_dict:
+            emotion_dict[emotion] = 0.0
+            
+    genre_emotion_data.append({
+        'Genre': genre,
+        **emotion_dict
+    })
+
+# Create DataFrame with emotion proportions
+genre_emotion_df = pd.DataFrame(genre_emotion_data)
+genre_emotion_df.set_index('Genre', inplace=True)
+
+# Create heatmap
+sns.heatmap(genre_emotion_df, 
+            annot=True, 
+            fmt='.2f', 
+            cmap='YlOrRd',
+            cbar_kws={'label': 'Proportion of Movies'})
+plt.title('Distribution of Emotions by Genre')
+plt.xlabel('Emotion')
+plt.ylabel('Genre')
+plt.tight_layout()
+save_plot('genre_emotion_distribution.png')
+
+# Print the actual proportions
+print("\nEmotion Distribution by Genre:")
+print(genre_emotion_df.round(2).to_string())
+
+# Add a comparison with expected emotions
+print("\nComparison with Expected Emotions:")
+for genre in genre_emotion_mapping:
+    if genre in genre_emotion_df.index:
+        print(f"\n{genre}:")
+        print(f"Expected emotions: {genre_emotion_mapping[genre]}")
+        print("Top actual emotions:", genre_emotion_df.loc[genre].nlargest(3).index.tolist())
+
+# Emotion Score Distribution by Genre
+plt.figure(figsize=(15, 8))
+emotions = ['anger', 'joy', 'fear', 'sadness', 'surprise', 'disgust', 'neutral']
+genre_emotion_data = []
+
+for genre in genres_list[:10]:  # Top 10 genres
+    mask = df['genres'].str.contains(genre, na=False)
+    for emotion in emotions:
+        avg_score = df.loc[mask, f'emotion_score_{emotion}'].mean()
+        genre_emotion_data.append({'Genre': genre, 'Emotion': emotion, 'Average Score': avg_score})
+
+genre_emotion_df = pd.DataFrame(genre_emotion_data)
+genre_emotion_pivot = genre_emotion_df.pivot(index='Genre', columns='Emotion', values='Average Score')
+
+plt.figure(figsize=(12, 8))
+sns.heatmap(genre_emotion_pivot, annot=True, fmt='.2f', cmap='RdYlBu_r')
+plt.title('Average Emotion Scores by Genre')
+plt.tight_layout()
+save_plot('genre_emotion_heatmap.png')
+
+# Correlation between emotion scores and ratings (sorted)
+emotion_rating_corr = df[[f'emotion_score_{e}' for e in emotions] + ['imdbRating']].corr()['imdbRating'].drop('imdbRating')
+emotion_rating_corr = emotion_rating_corr.sort_values(ascending=False)  # Sort correlations
+plt.figure(figsize=(10, 6))
+sns.barplot(x=emotion_rating_corr.index, y=emotion_rating_corr.values)
+plt.title('Correlation between Emotion Scores and IMDb Rating (Sorted)')
+plt.xlabel('Emotion')
+plt.ylabel('Correlation Coefficient')
+plt.xticks(rotation=45)
+save_plot('emotion_rating_correlation.png')
