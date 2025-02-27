@@ -1,0 +1,12 @@
+Appeal Metric Evaluation Results
+==============================
+
+Correlations with success indicators:
+appeal_metric     1.000
+imdbRating        0.010
+numberOfVotes     0.104
+runtimeMinutes    0.060
+Name: appeal_metric, dtype: float64
+
+Cross-validation scores:
+Mean R²: 0.185 (+/- 0.058)
