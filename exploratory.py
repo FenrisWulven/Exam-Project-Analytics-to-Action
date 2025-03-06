@@ -499,3 +499,66 @@ plt.xlabel('Emotion')
 plt.ylabel('Correlation Coefficient')
 plt.xticks(rotation=45)
 save_plot('emotion_rating_correlation.png')
+
+# Production Companies Analysis
+print("\nProduction Companies Analysis:")
+print("\nSample of production values:")
+print(df['production'].head().to_string())
+
+# Split production companies and get unique counts
+all_production_companies = []
+for companies in df['production'].dropna():
+    all_production_companies.extend(companies.split(', '))
+    
+production_counts = pd.Series(all_production_companies).value_counts()
+print("\nTop 20 Production Companies:")
+print(production_counts.head(20))
+
+# Keywords Analysis
+print("\nKeywords Analysis:")
+print("\nSample of keywords values:")
+print(df['keywords'].head().to_string())
+
+# Split keywords and get unique counts
+all_keywords = []
+for keywords in df['keywords'].dropna():
+    all_keywords.extend(keywords.split(', '))
+    
+keyword_counts = pd.Series(all_keywords).value_counts()
+print("\nTop 20 Keywords:")
+print(keyword_counts.head(20))
+
+# Visualize top production companies
+plt.figure(figsize=(12, 6))
+sns.barplot(x=production_counts.head(15).index, y=production_counts.head(15).values)
+plt.title('Top 15 Production Companies')
+plt.xlabel('Production Company')
+plt.ylabel('Number of Movies')
+plt.xticks(rotation=45, ha='right')
+save_plot('top_production_companies_detailed.png')
+
+# Visualize top keywords
+plt.figure(figsize=(12, 6))
+sns.barplot(x=keyword_counts.head(15).index, y=keyword_counts.head(15).values)
+plt.title('Top 15 Keywords')
+plt.xlabel('Keyword')
+plt.ylabel('Frequency')
+plt.xticks(rotation=45, ha='right')
+save_plot('top_keywords.png')
+
+# Word cloud for keywords
+from wordcloud import WordCloud
+# Create word cloud from keywords
+wordcloud = WordCloud(width=1200, height=800, background_color='white').generate(' '.join(all_keywords))
+plt.figure(figsize=(15, 10))
+plt.imshow(wordcloud, interpolation='bilinear')
+plt.axis('off')
+plt.title('Keyword Word Cloud')
+save_plot('keyword_wordcloud.png')
+
+# Head of genres column
+print("\nSample of genres values:")
+print(df['genres'].head().to_string())
+
+
+
